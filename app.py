@@ -55,8 +55,6 @@ def check_url_exists(short_url):
 
 
 def add_url(original_url, short_url):
-    if "http://" or "https://" not in original_url:
-        original_url = "http://" + original_url
     connection = connect_to_db()
     cursor = connection.cursor()
     cursor.execute("INSERT INTO urls (original_url, short_url) VALUES (%s, %s)", (original_url, short_url))
@@ -143,34 +141,40 @@ if __name__ == '__main__':
         client = discord.Client(intents=intents)
         tree = discord.app_commands.CommandTree(client)
 
+        def create_error_embed(description):
+            return discord.Embed(title="Error", description=description, color=discord.Color.red())
+
+        def create_success_embed(description):
+            return discord.Embed(title="Success", description=description, color=discord.Color.green())
+
 
         # Command to shorten URL
         @tree.command(name='shorten', description='Shorten a URL',
                       guilds=[discord.Object(id=settings['discord']['guild_id'])])
         async def shorten(interaction: discord.Interaction, original_url: str, custom_url: str = None):
-            await interaction.response.defer(ephemeral=True)
+            await interaction.response.defer(ephemeral=False)
             if not original_url:
-                await interaction.followup.send("Original URL is required", ephemeral=True)
+                await interaction.followup.send(embed=create_success_embed('URL not provided'), ephemeral=False)
+                return
+            if not original_url.startswith(('http://', 'https://')):
+                await interaction.followup.send(embed=create_error_embed('URL must start with http:// or https://'), ephemeral=False)
                 return
             if custom_url:
                 if len(custom_url) > 10 or not custom_url.isalnum():
-                    await interaction.followup.send(
-                        "Custom short URL must be alphanumeric and up to 10 characters long", ephemeral=True)
+                    await interaction.followup.send(embed=create_success_embed("Custom short URL must be alphanumeric and up to 10 characters long"), ephemeral=False)
                     return
                 if check_url_exists(custom_url):
-                    await interaction.followup.send("Custom short URL already exists", ephemeral=True)
+                    await interaction.followup.send(embed=create_error_embed("Custom URL already exists"), ephemeral=False)
                     return
                 add_url(original_url, custom_url)
-                await interaction.followup.send(
-                    f"Shortened URL: {settings['shortener']['base_url']}/{custom_url}", ephemeral=True)
+                await interaction.followup.send(embed=create_success_embed(f"URL: {settings['shortener']['base_url']}/{custom_url}"), ephemeral=False)
             else:
                 while True:
                     custom_url = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
                     if not check_url_exists(custom_url):
                         break
                 add_url(original_url, custom_url)
-                await interaction.followup.send(
-                    f"Shortened URL: {settings['shortener']['base_url']}/{custom_url}", ephemeral=True)
+                await interaction.followup.send(embed=create_success_embed(f"URL: {settings['shortener']['base_url']}/{custom_url}"), ephemeral=False)
 
 
         @client.event
